@@ -18,18 +18,22 @@
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QShortcut>
 #include <QVBoxLayout>
+#include <QWebFrame>
 #include <QWebHistory>
 
+#include "NoScrollbarStyle.hpp"
 #include "Window.hpp"
 
 using namespace std::placeholders;
 
-Window::Window() : command(), currentTitle(), keybindings() {
+Window::Window() : command(), controlKeybindings(), currentTitle(), homepage(), keybindings() {
     loadConfig();
     configure();
     createWidgets();
     createEvents();
+    loadHomepage();
 }
 
 void Window::commandMode() {
@@ -55,26 +59,44 @@ void Window::createWidgets() {
     setLayout(vbox);
 
     //The web view.
-    webView = new QWebView;
-    webView->load(QUrl("http://fsf.org"));
+    webView = new ModalWebView(mode, this);
+    qApp->setStyle(new NoScrollbarStyle);
     vbox->addWidget(webView);
 
-    //The status bar label.
+    //The status bar.
     //TODO: use a real status bar?
     QHBoxLayout* hbox{new QHBoxLayout};
+    hbox->setContentsMargins(0, 0, 5, 4);
     vbox->addLayout(hbox);
 
-    statusBarLabel = new QLabel;
-    QFont labelFont{statusBarLabel->font()};
+    modeLabel = new QLabel;
+    QFont labelFont{modeLabel->font()};
     labelFont.setPointSize(statusBarFontSize);
-    statusBarLabel->setFont(labelFont);
-    statusBarLabel->setMaximumHeight(statusBarFontSize + 4);
-    hbox->setContentsMargins(0, 0, 5, 4);
-    hbox->addWidget(statusBarLabel);
+    modeLabel->setFont(labelFont);
+    hbox->addWidget(modeLabel);
 
+    commandLabel = new QLabel;
+    commandLabel->setFont(labelFont);
+    commandLabel->setMaximumHeight(statusBarFontSize + 4);
+    hbox->addWidget(commandLabel);
+
+    //The text field.
     lineEdit = new QLineEdit;
     lineEdit->hide();
+    lineEdit->setFrame(false);
     hbox->addWidget(lineEdit);
+
+    hbox->addStretch(1);
+
+    //The scroll value label.
+    scrollValueLabel = new QLabel("[" + tr("top") + "]");
+    scrollValueLabel->setFont(labelFont);
+    scrollValueLabel->setMaximumHeight(statusBarFontSize + 4);
+    hbox->addWidget(scrollValueLabel);
+}
+
+QWebFrame* Window::currentFrame() const {
+    return webView->page()->currentFrame();
 }
 
 void Window::historyBack() {
@@ -85,6 +107,15 @@ void Window::historyForward() {
     webView->history()->forward();
 }
 
+void Window::insertMode() {
+    mode = Mode::INSERT;
+    modeLabel->setText("-- " + tr("INSERT MODE") + " --");
+}
+
+void Window::keyPress(QKeyEvent* keyEvent) {
+    keyPressEvent(keyEvent);
+}
+
 void Window::keyPressEvent(QKeyEvent* keyEvent) {
     int key{keyEvent->key()};
     if(Qt::Key_Escape == key) {
@@ -92,38 +123,62 @@ void Window::keyPressEvent(QKeyEvent* keyEvent) {
     }
     else if(Mode::NORMAL == mode) {
         QChar charKey{key};
-        if(charKey.isLetter()) {
-            if(0 == (keyEvent->modifiers() & Qt::ShiftModifier)) {
-                charKey = charKey.toLower();
-            }
-            command.append(charKey);
+        if(charKey.isLetter() and 0 == (keyEvent->modifiers() & Qt::ShiftModifier)) {
+            charKey = charKey.toLower();
         }
+        if(0 == (keyEvent->modifiers() & Qt::ControlModifier)) {
+            if(charKey.isLetter()) {
+                command.append(charKey);
+            }
 
-        processCommand();
+            processCommand();
+        }
+        else {
+            processShortcut(charKey);
+        }
     }
     else {
         QWidget::keyPressEvent(keyEvent);
     }
 
-    statusBarLabel->setText(command);
+    commandLabel->setText(command);
+    commandLabel->repaint();
 }
 
 void Window::loadConfig() {
+    homepage = QUrl("http://ixquick.com");
     statusBarFontSize = 12;
 
     keybindings["b"] = std::bind(&Window::historyBack, _1);
     keybindings["f"] = std::bind(&Window::historyForward, _1);
     keybindings["e"] = std::bind(&Window::pageReload, _1);
+    keybindings["c"] = std::bind(&Window::scrollLeft, _1);
+    keybindings["r"] = std::bind(&Window::scrollRight, _1);
+    keybindings["s"] = std::bind(&Window::scrollUp, _1);
+    keybindings["t"] = std::bind(&Window::scrollDown, _1);
+    keybindings["G"] = std::bind(&Window::scrollToBottom, _1);
+    keybindings["gg"] = std::bind(&Window::scrollToTop, _1);
     keybindings["o"] = std::bind(&Window::showOpen, _1);
     keybindings["O"] = std::bind(&Window::showWindowOpen, _1);
     keybindings["go"] = std::bind(&Window::showOpenWithCurrentURL, _1);
+    keybindings["i"] = std::bind(&Window::insertMode, _1);
     keybindings["ZZ"] = std::bind(&Window::quit, _1);
+
+    controlKeybindings['b'] = std::bind(&Window::scrollUpPage, _1);
+    controlKeybindings['d'] = std::bind(&Window::scrollDownHalfPage, _1);
+    controlKeybindings['f'] = std::bind(&Window::scrollDownPage, _1);
+    controlKeybindings['u'] = std::bind(&Window::scrollUpHalfPage, _1);
 }
 
 void Window::loadFinished() {
     inProgress = false;
     progression = 0;
     setTitle();
+    updateScrollLabel();
+}
+
+void Window::loadHomepage() {
+    webView->load(homepage);
 }
 
 void Window::loadProgress(int progress) {
@@ -132,6 +187,7 @@ void Window::loadProgress(int progress) {
 }
 
 void Window::loadStarted() {
+    normalMode();
     inProgress = true;
     setTitle();
 }
@@ -140,8 +196,9 @@ void Window::normalMode() {
     mode = Mode::NORMAL;
     lineEdit->hide();
     lineEdit->clear();
+    modeLabel->clear();
     command.clear();
-    statusBarLabel->setText(command);
+    commandLabel->clear();
     disconnect(lineEdit, nullptr, nullptr, nullptr);
 }
 
@@ -161,8 +218,70 @@ void Window::processCommand() {
     }
 }
 
+void Window::processShortcut(QChar charKey) {
+    if(controlKeybindings.contains(charKey)) {
+        controlKeybindings[charKey](this);
+    }
+}
+
 void Window::quit() {
     qApp->quit();
+}
+
+void Window::resizeEvent(QResizeEvent* windowResizeEvent) {
+    QWidget::resizeEvent(windowResizeEvent);
+
+    if(nullptr != webView and nullptr != webView->page()) {
+        updateScrollLabel();
+    }
+}
+
+void Window::scrollDown() {
+    currentFrame()->scroll(0, SCROLL_DELTA);
+    updateScrollLabel();
+}
+
+void Window::scrollDownHalfPage() {
+    currentFrame()->scroll(0, (webView->page()->viewportSize().height() - SCROLL_DELTA) / 2);
+    updateScrollLabel();
+}
+
+void Window::scrollDownPage() {
+    currentFrame()->scroll(0, webView->page()->viewportSize().height() - SCROLL_DELTA);
+    updateScrollLabel();
+}
+
+void Window::scrollLeft() {
+    currentFrame()->scroll(-SCROLL_DELTA, 0);
+}
+
+void Window::scrollRight() {
+    currentFrame()->scroll(SCROLL_DELTA, 0);
+}
+
+void Window::scrollUp() {
+    currentFrame()->scroll(0, -SCROLL_DELTA);
+    updateScrollLabel();
+}
+
+void Window::scrollUpHalfPage() {
+    currentFrame()->scroll(0, (- webView->page()->viewportSize().height() + SCROLL_DELTA) / 2);
+    updateScrollLabel();
+}
+
+void Window::scrollUpPage() {
+    currentFrame()->scroll(0, - webView->page()->viewportSize().height() + SCROLL_DELTA);
+    updateScrollLabel();
+}
+
+void Window::scrollToBottom() {
+    currentFrame()->setScrollBarValue(Qt::Vertical, currentFrame()->scrollBarMaximum(Qt::Vertical));
+    updateScrollLabel();
+}
+
+void Window::scrollToTop() {
+    currentFrame()->setScrollBarValue(Qt::Vertical, 0);
+    updateScrollLabel();
 }
 
 void Window::setTitle() {
@@ -174,7 +293,7 @@ void Window::setTitle() {
 }
 
 void Window::showOpen() {
-    statusBarLabel->setText(tr("open:"));
+    modeLabel->setText(tr("open") + ":");
     commandMode();
     connect(lineEdit, &QLineEdit::returnPressed, this, &Window::open);
 }
@@ -190,4 +309,22 @@ void Window::showWindowOpen() {
 void Window::titleChanged(QString const& title) {
     currentTitle = title;
     setTitle();
+}
+
+void Window::updateScrollLabel() {
+    if(0 == currentFrame()->scrollBarValue(Qt::Vertical) and 0 == currentFrame()->scrollBarMaximum(Qt::Vertical)) {
+            scrollValueLabel->setText("[" + tr("all") + "]");
+    }
+    else {
+        int scrollPercentage = int(double(currentFrame()->scrollBarValue(Qt::Vertical)) / currentFrame()->scrollBarMaximum(Qt::Vertical) * 100);
+        if(0 == scrollPercentage) {
+            scrollValueLabel->setText("[" + tr("top") + "]");
+        }
+        else if(100 == scrollPercentage) {
+            scrollValueLabel->setText("[" + tr("bot") + "]");
+        }
+        else {
+            scrollValueLabel->setText("[" + QString::number(scrollPercentage) + "%]");
+        }
+    }
 }

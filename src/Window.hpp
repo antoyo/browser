@@ -23,14 +23,13 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QtWidgets/QWidget>
-#include <QWebView>
+
+#include "ModalWebView.hpp"
 
 /*
  * Main window of the web browser.
  */
 class Window : public QWidget {
-    Q_OBJECT
-
     public:
         Window();
 
@@ -38,27 +37,39 @@ class Window : public QWidget {
 
         Window& operator=(Window const&) = delete;
 
+        /*
+         * Trigger a key press event.
+         */
+        void keyPress(QKeyEvent* keyEvent);
+
+        /*
+         * Change to normal mode.
+         */
+        void normalMode();
+
     protected:
         virtual void keyPressEvent(QKeyEvent* keyEvent);
 
+        virtual void resizeEvent(QResizeEvent* windowResizeEvent);
+
     private:
-        enum class Mode {
-            COMMAND,
-            INSERT,
-            NORMAL
-        };
+        int SCROLL_DELTA = 50;
 
         QString command;
+        QMap<QChar, std::function<void(Window*)>> controlKeybindings;
         QString currentTitle;
+        QUrl homepage;
         bool inProgress = false;
         QMap<QString, std::function<void(Window*)>> keybindings;
         Mode mode = Mode::NORMAL;
         int progression = 0;
         int statusBarFontSize = 0;
 
+        QLabel* commandLabel = nullptr;
         QLineEdit* lineEdit = nullptr;
-        QLabel* statusBarLabel = nullptr;
-        QWebView* webView = nullptr;
+        QLabel* modeLabel = nullptr;
+        QLabel* scrollValueLabel = nullptr;
+        ModalWebView* webView = nullptr;
 
         /*
          * Change to command mode.
@@ -76,9 +87,19 @@ class Window : public QWidget {
         void createEvents();
 
         /*
+         * Create the window shortcuts.
+         */
+        void createShortcuts();
+
+        /*
          * Create the widgets.
          */
         void createWidgets();
+
+        /*
+         * Get the current frame.
+         */
+        QWebFrame* currentFrame() const;
 
         /*
          * Go back in history.
@@ -91,6 +112,11 @@ class Window : public QWidget {
         void historyForward();
 
         /*
+         * Change to insert mode.
+         */
+        void insertMode();
+
+        /*
          * Load the browser configuration.
          */
         void loadConfig();
@@ -101,6 +127,11 @@ class Window : public QWidget {
         void loadFinished();
 
         /*
+         * Load the homepage.
+         */
+        void loadHomepage();
+
+        /*
          * Load progress event.
          */
         void loadProgress(int progress);
@@ -109,11 +140,6 @@ class Window : public QWidget {
          * Load started event.
          */
         void loadStarted();
-
-        /*
-         * Change to normal mode.
-         */
-        void normalMode();
 
         /*
          * Open the URL in the input text field.
@@ -131,9 +157,64 @@ class Window : public QWidget {
         void processCommand();
 
         /*
+         * Check if the input key exists and execute the shortcut.
+         */
+        void processShortcut(QChar charKey);
+
+        /*
          * Quit the application.
          */
         void quit();
+
+        /*
+         * Scroll down the web view.
+         */
+        void scrollDown();
+
+        /*
+         * Scroll down the web view by half a page.
+         */
+        void scrollDownHalfPage();
+
+        /*
+         * Scroll down the web view by one page.
+         */
+        void scrollDownPage();
+
+        /*
+         * Scroll left the web view.
+         */
+        void scrollLeft();
+
+        /*
+         * Scroll right the web view.
+         */
+        void scrollRight();
+
+        /*
+         * Scroll to the end of the page.
+         */
+        void scrollToBottom();
+
+        /*
+         * Scroll to the beginning of the page.
+         */
+        void scrollToTop();
+
+        /*
+         * Scroll up the web view.
+         */
+        void scrollUp();
+
+        /*
+         * Scroll up the web view by half a page.
+         */
+        void scrollUpHalfPage();
+
+        /*
+         * Scroll up the web view by one page.
+         */
+        void scrollUpPage();
 
         /*
          * Set the window title with the progress in a web page is loading.
@@ -159,6 +240,16 @@ class Window : public QWidget {
          * Title changed event.
          */
         void titleChanged(QString const& title);
+
+        /*
+         * Update the scroll label.
+         */
+        void updateScrollLabel();
+
+        /*
+         * Window resized event.
+         */
+        void windowResized(QSize const&);
 };
 
 #endif
