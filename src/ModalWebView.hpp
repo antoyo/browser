@@ -22,6 +22,7 @@
 
 enum class Mode {
     COMMAND,
+    FOLLOW,
     INSERT,
     NORMAL
 };

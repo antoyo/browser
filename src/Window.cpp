@@ -20,6 +20,7 @@
 #include <QKeyEvent>
 #include <QShortcut>
 #include <QVBoxLayout>
+#include <QWebElementCollection>
 #include <QWebFrame>
 #include <QWebHistory>
 
@@ -28,7 +29,7 @@
 
 using namespace std::placeholders;
 
-Window::Window() : command(), controlKeybindings(), currentTitle(), homepage(), keybindings() {
+Window::Window() : command(), controlKeybindings(), currentTitle(), homepage(), linkMappings(), keybindings() {
     loadConfig();
     configure();
     createWidgets();
@@ -121,7 +122,7 @@ void Window::keyPressEvent(QKeyEvent* keyEvent) {
     if(Qt::Key_Escape == key) {
         normalMode();
     }
-    else if(Mode::NORMAL == mode) {
+    else if(Mode::NORMAL == mode or Mode::FOLLOW == mode) {
         QChar charKey{key};
         if(charKey.isLetter() and 0 == (keyEvent->modifiers() & Qt::ShiftModifier)) {
             charKey = charKey.toLower();
@@ -150,7 +151,7 @@ void Window::loadConfig() {
     statusBarFontSize = 12;
 
     keybindings["b"] = std::bind(&Window::historyBack, _1);
-    keybindings["f"] = std::bind(&Window::historyForward, _1);
+    keybindings["é"] = std::bind(&Window::historyForward, _1);
     keybindings["e"] = std::bind(&Window::pageReload, _1);
     keybindings["c"] = std::bind(&Window::scrollLeft, _1);
     keybindings["r"] = std::bind(&Window::scrollRight, _1);
@@ -163,6 +164,7 @@ void Window::loadConfig() {
     keybindings["go"] = std::bind(&Window::showOpenWithCurrentURL, _1);
     keybindings["i"] = std::bind(&Window::insertMode, _1);
     keybindings["ZZ"] = std::bind(&Window::quit, _1);
+    keybindings["f"] = std::bind(&Window::showFollowLabels, _1);
 
     controlKeybindings['b'] = std::bind(&Window::scrollUpPage, _1);
     controlKeybindings['d'] = std::bind(&Window::scrollDownHalfPage, _1);
@@ -192,6 +194,22 @@ void Window::loadStarted() {
     setTitle();
 }
 
+void Window::nextMapping(QString& mapping) {
+    //TODO: generate more meaningful mapping.
+    if(QString(mapping.size(), 'z') == mapping) {
+        mapping.resize(mapping.size() + 1);
+        mapping.replace(0, mapping.size(), QString(mapping.size(), 'a'));
+    }
+    else if("z" == mapping.right(1)) {
+        mapping[mapping.size() - 1] = 'a';
+        mapping[mapping.size() - 2] = mapping[mapping.size() - 2].toLatin1() + 1;
+        //TODO: support mapping of length more than 2.
+    }
+    else {
+        mapping[mapping.size() - 1] = mapping[mapping.size() - 1].toLatin1() + 1;
+    }
+}
+
 void Window::normalMode() {
     mode = Mode::NORMAL;
     lineEdit->hide();
@@ -200,10 +218,11 @@ void Window::normalMode() {
     command.clear();
     commandLabel->clear();
     disconnect(lineEdit, nullptr, nullptr, nullptr);
+    removeLabels();
 }
 
 void Window::open() {
-    webView->load(QUrl(lineEdit->text()));
+    webView->load(QUrl::fromUserInput(lineEdit->text()));
     normalMode();
 }
 
@@ -212,7 +231,12 @@ void Window::pageReload() {
 }
 
 void Window::processCommand() {
-    if(keybindings.contains(command)) {
+    if(Mode::FOLLOW == mode) {
+        if(linkMappings.contains(command)) {
+            webView->load(linkMappings[command]);
+        }
+    }
+    else if(keybindings.contains(command)) {
         keybindings[command](this);
         command.clear();
     }
@@ -226,6 +250,13 @@ void Window::processShortcut(QChar charKey) {
 
 void Window::quit() {
     qApp->quit();
+}
+
+void Window::removeLabels() {
+    QWebElementCollection elements{currentFrame()->findAllElements("." + labelClass)};
+    for(auto it(elements.begin()) ; it != elements.end() ; it++) {
+        (*it).removeFromDocument();
+    }
 }
 
 void Window::resizeEvent(QResizeEvent* windowResizeEvent) {
@@ -290,6 +321,40 @@ void Window::setTitle() {
         newTitle.prepend("[" + QString::number(progression) + "%] ");
     }
     setWindowTitle(newTitle);
+}
+
+void Window::showFollowLabels() {
+    mode = Mode::FOLLOW;
+    modeLabel->setText(tr("follow") + ":");
+    QWebElementCollection elements{currentFrame()->findAllElements("a")};
+    linkMappings.clear();
+    QString mapping;
+    //TODO: make mapping of fixed size.
+    for(auto it(elements.begin()) ; it != elements.end() ; it++) {
+        QRect elementRect{(*it).geometry()};
+        if(elementRect.width() > 0 and elementRect.height() > 0) {
+            nextMapping(mapping);
+            (*it).appendInside(R"html(<span class=")html" + labelClass + R"html(" style=")html"
+                "background: white;"
+                "border: 1px solid black;"
+                "border-radius: 3px;"
+                "color: black;"
+                "font-family: sans-serif;"
+                "font-size: 12pt;"
+                "font-style: normal;"
+                "font-weight: bold;"
+                "padding: 0 2px 0 2px;"
+                "position: absolute;"
+            "\">" + mapping + "</span>");
+            QString href{(*it).attribute("href")};
+            QUrl url{href};
+            if(href.startsWith("/")) {
+                QUrl currentURL{webView->url()};
+                url = QUrl(currentURL.scheme() + "://" + currentURL.host() + href);
+            }
+            linkMappings[mapping] = url;
+        }
+    }
 }
 
 void Window::showOpen() {

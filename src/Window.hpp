@@ -53,6 +53,7 @@ class Window : public QWidget {
         virtual void resizeEvent(QResizeEvent* windowResizeEvent);
 
     private:
+        QString labelClass = "__browser_label__";
         int SCROLL_DELTA = 50;
 
         QString command;
@@ -60,6 +61,7 @@ class Window : public QWidget {
         QString currentTitle;
         QUrl homepage;
         bool inProgress = false;
+        QMap<QString, QUrl> linkMappings;
         QMap<QString, std::function<void(Window*)>> keybindings;
         Mode mode = Mode::NORMAL;
         int progression = 0;
@@ -142,6 +144,11 @@ class Window : public QWidget {
         void loadStarted();
 
         /*
+         * Generate a mapping from the previous mapping.
+         */
+        void nextMapping(QString& mapping);
+
+        /*
          * Open the URL in the input text field.
          */
         void open();
@@ -165,6 +172,11 @@ class Window : public QWidget {
          * Quit the application.
          */
         void quit();
+
+        /*
+         * Remove the labels.
+         */
+        void removeLabels();
 
         /*
          * Scroll down the web view.
@@ -220,6 +232,11 @@ class Window : public QWidget {
          * Set the window title with the progress in a web page is loading.
          */
         void setTitle();
+
+        /*
+         * Show the labels on links.
+         */
+        void showFollowLabels();
 
         /*
          * Show open URL input text field.
