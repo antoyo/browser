@@ -53,7 +53,7 @@ class Window : public QWidget {
         virtual void resizeEvent(QResizeEvent* windowResizeEvent);
 
     private:
-        QString labelClass = "__browser_label__";
+        QString labelClass = "__navim_label__";
         int SCROLL_DELTA = 50;
 
         QString command;

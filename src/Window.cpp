@@ -195,7 +195,7 @@ void Window::loadStarted() {
 }
 
 void Window::nextMapping(QString& mapping) {
-    //TODO: generate more meaningful mapping.
+    //TODO: Increment the first letter, then the second.
     if(QString(mapping.size(), 'z') == mapping) {
         mapping.resize(mapping.size() + 1);
         mapping.replace(0, mapping.size(), QString(mapping.size(), 'a'));
