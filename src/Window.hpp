@@ -22,6 +22,8 @@
 
 #include <QLabel>
 #include <QLineEdit>
+#include <QProgressBar>
+#include <QWebElement>
 #include <QtWidgets/QWidget>
 
 #include "ModalWebView.hpp"
@@ -31,7 +33,7 @@
  */
 class Window : public QWidget {
     public:
-        Window();
+        Window(QString const& initialURL);
 
         Window(Window const&) = delete;
 
@@ -47,6 +49,11 @@ class Window : public QWidget {
          */
         void normalMode();
 
+        /*
+         * Open the url in a new window.
+         */
+        void openNewWindow(QUrl const& url);
+
     protected:
         virtual void keyPressEvent(QKeyEvent* keyEvent);
 
@@ -59,18 +66,21 @@ class Window : public QWidget {
         QString command;
         QMap<QChar, std::function<void(Window*)>> controlKeybindings;
         QString currentTitle;
+        QMap<QString, QWebElement> elementMappings;
         QUrl homepage;
         bool inProgress = false;
-        QMap<QString, QUrl> linkMappings;
         QMap<QString, std::function<void(Window*)>> keybindings;
         Mode mode = Mode::NORMAL;
+        bool newWindow = false;
         int progression = 0;
         int statusBarFontSize = 0;
 
         QLabel* commandLabel = nullptr;
         QLineEdit* lineEdit = nullptr;
         QLabel* modeLabel = nullptr;
+        QProgressBar* progressBar = nullptr;
         QLabel* scrollValueLabel = nullptr;
+        QLabel* urlLabel = nullptr;
         ModalWebView* webView = nullptr;
 
         /*
@@ -114,9 +124,19 @@ class Window : public QWidget {
         void historyForward();
 
         /*
+         * Icon changed event.
+         */
+        void iconChanged();
+
+        /*
          * Change to insert mode.
          */
         void insertMode();
+
+        /*
+         * Link hovered event.
+         */
+        void linkHovered(QString const& link, QString const&, QString const&);
 
         /*
          * Load the browser configuration.
@@ -129,9 +149,9 @@ class Window : public QWidget {
         void loadFinished();
 
         /*
-         * Load the homepage.
+         * Load the URL from the command line argument or the homepage if no URL was provided.
          */
-        void loadHomepage();
+        void loadInitialURLOrHomepage(QString const& initialURL);
 
         /*
          * Load progress event.
@@ -234,9 +254,14 @@ class Window : public QWidget {
         void setTitle();
 
         /*
-         * Show the labels on links.
+         * Show the labels on links and form elements.
          */
         void showFollowLabels();
+
+        /*
+         * Show the labels on links and form elements to open the link in a new window.
+         */
+        void showFollowLabelsNewWindow();
 
         /*
          * Show open URL input text field.
@@ -262,6 +287,11 @@ class Window : public QWidget {
          * Update the scroll label.
          */
         void updateScrollLabel();
+
+        /*
+         * Url changed event.
+         */
+        void urlChanged(QUrl const& url);
 
         /*
          * Window resized event.

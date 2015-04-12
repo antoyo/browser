@@ -18,6 +18,7 @@
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QProcess>
 #include <QShortcut>
 #include <QVBoxLayout>
 #include <QWebElementCollection>
@@ -29,12 +30,12 @@
 
 using namespace std::placeholders;
 
-Window::Window() : command(), controlKeybindings(), currentTitle(), homepage(), linkMappings(), keybindings() {
+Window::Window(QString const& initialURL) : command(), controlKeybindings(), currentTitle(), elementMappings(), homepage(), keybindings() {
     loadConfig();
     configure();
     createWidgets();
     createEvents();
-    loadHomepage();
+    loadInitialURLOrHomepage(initialURL);
 }
 
 void Window::commandMode() {
@@ -52,6 +53,10 @@ void Window::createEvents() {
     connect(webView, &QWebView::loadStarted, this, &Window::loadStarted);
     connect(webView, &QWebView::loadFinished, this, &Window::loadFinished);
     connect(webView, &QWebView::loadProgress, this, &Window::loadProgress);
+    connect(webView, &QWebView::urlChanged, this, &Window::urlChanged);
+    connect(webView, &QWebView::iconChanged, this, &Window::iconChanged);
+    connect(webView->page(), &QWebPage::linkHovered, this, &Window::linkHovered);
+    //TODO: connect(webView, &QWebView::statusBarMessage, this, &Window::statusBarMessage);
 }
 
 void Window::createWidgets() {
@@ -60,8 +65,10 @@ void Window::createWidgets() {
     setLayout(vbox);
 
     //The web view.
+    //TODO: manage new window requested.
     webView = new ModalWebView(mode, this);
-    qApp->setStyle(new NoScrollbarStyle);
+    //TODO: change this path to ~/.navim/icons.
+    webView->settings()->setIconDatabasePath("/tmp");
     vbox->addWidget(webView);
 
     //The status bar.
@@ -89,11 +96,23 @@ void Window::createWidgets() {
 
     hbox->addStretch(1);
 
+    //The URL label.
+    urlLabel = new QLabel;
+    urlLabel->setFont(labelFont);
+    urlLabel->setMaximumHeight(statusBarFontSize + 4);
+    hbox->addWidget(urlLabel);
+
     //The scroll value label.
     scrollValueLabel = new QLabel("[" + tr("top") + "]");
     scrollValueLabel->setFont(labelFont);
     scrollValueLabel->setMaximumHeight(statusBarFontSize + 4);
     hbox->addWidget(scrollValueLabel);
+
+    //The progress bar.
+    progressBar = new QProgressBar;
+    progressBar->setMaximumHeight(statusBarFontSize + 4);
+    progressBar->hide();
+    hbox->addWidget(progressBar);
 }
 
 QWebFrame* Window::currentFrame() const {
@@ -106,6 +125,10 @@ void Window::historyBack() {
 
 void Window::historyForward() {
     webView->history()->forward();
+}
+
+void Window::iconChanged() {
+    setWindowIcon(webView->icon());
 }
 
 void Window::insertMode() {
@@ -124,8 +147,13 @@ void Window::keyPressEvent(QKeyEvent* keyEvent) {
     }
     else if(Mode::NORMAL == mode or Mode::FOLLOW == mode) {
         QChar charKey{key};
-        if(charKey.isLetter() and 0 == (keyEvent->modifiers() & Qt::ShiftModifier)) {
-            charKey = charKey.toLower();
+        if(Qt::Key_Backspace == key) {
+            command.chop(1);
+        }
+        else {
+            if(charKey.isLetter() and 0 == (keyEvent->modifiers() & Qt::ShiftModifier)) {
+                charKey = charKey.toLower();
+            }
         }
         if(0 == (keyEvent->modifiers() & Qt::ControlModifier)) {
             if(charKey.isLetter()) {
@@ -144,6 +172,15 @@ void Window::keyPressEvent(QKeyEvent* keyEvent) {
 
     commandLabel->setText(command);
     commandLabel->repaint();
+}
+
+void Window::linkHovered(QString const& link, QString const&, QString const&) {
+    if(link.isEmpty()) {
+        urlLabel->setText(webView->url().toString());
+    }
+    else {
+        urlLabel->setText(link);
+    }
 }
 
 void Window::loadConfig() {
@@ -165,6 +202,7 @@ void Window::loadConfig() {
     keybindings["i"] = std::bind(&Window::insertMode, _1);
     keybindings["ZZ"] = std::bind(&Window::quit, _1);
     keybindings["f"] = std::bind(&Window::showFollowLabels, _1);
+    keybindings["F"] = std::bind(&Window::showFollowLabelsNewWindow, _1);
 
     controlKeybindings['b'] = std::bind(&Window::scrollUpPage, _1);
     controlKeybindings['d'] = std::bind(&Window::scrollDownHalfPage, _1);
@@ -177,40 +215,48 @@ void Window::loadFinished() {
     progression = 0;
     setTitle();
     updateScrollLabel();
+    progressBar->hide();
 }
 
-void Window::loadHomepage() {
-    webView->load(homepage);
+void Window::loadInitialURLOrHomepage(QString const& initialURL) {
+    if(initialURL.isEmpty()) {
+        webView->load(homepage);
+    }
+    else {
+        webView->load(initialURL);
+    }
 }
 
 void Window::loadProgress(int progress) {
     progression = progress;
     setTitle();
+    progressBar->setValue(progress);
 }
 
 void Window::loadStarted() {
+    setWindowIcon(QIcon());
     normalMode();
     inProgress = true;
     setTitle();
+    progressBar->show();
 }
 
 void Window::nextMapping(QString& mapping) {
-    //TODO: Increment the first letter, then the second.
-    if(QString(mapping.size(), 'z') == mapping) {
-        mapping.resize(mapping.size() + 1);
-        mapping.replace(0, mapping.size(), QString(mapping.size(), 'a'));
-    }
-    else if("z" == mapping.right(1)) {
-        mapping[mapping.size() - 1] = 'a';
-        mapping[mapping.size() - 2] = mapping[mapping.size() - 2].toLatin1() + 1;
-        //TODO: support mapping of length more than 2.
+    if('z' == mapping[0]) {
+        int index{0};
+        while(index < mapping.size() and 'z' == mapping[index]) {
+            mapping[index] = 'a';
+            mapping[index + 1] = mapping[index + 1].toLatin1() + 1;
+            index++;
+        }
     }
     else {
-        mapping[mapping.size() - 1] = mapping[mapping.size() - 1].toLatin1() + 1;
+        mapping[0] = mapping[0].toLatin1() + 1;
     }
 }
 
 void Window::normalMode() {
+    newWindow = false;
     mode = Mode::NORMAL;
     lineEdit->hide();
     lineEdit->clear();
@@ -226,14 +272,54 @@ void Window::open() {
     normalMode();
 }
 
+void Window::openNewWindow(QUrl const& newURL) {
+    QStringList arguments;
+    arguments << newURL.toString();
+    QProcess::startDetached(qApp->applicationFilePath(), arguments);
+}
+
 void Window::pageReload() {
     webView->reload();
 }
 
 void Window::processCommand() {
     if(Mode::FOLLOW == mode) {
-        if(linkMappings.contains(command)) {
-            webView->load(linkMappings[command]);
+        if(elementMappings.contains(command)) {
+            QWebElement& element = elementMappings[command];
+
+            if(newWindow and "A" == element.tagName()) {
+                QString href{element.attribute("href")};
+                QUrl url{href};
+                if(url.scheme().isEmpty()) {
+                    QUrl currentURL{webView->url()};
+                    url = QUrl(currentURL.scheme() + "://" + currentURL.host() + href);
+                }
+                openNewWindow(url);
+                normalMode();
+            }
+            else {
+                element.setFocus();
+                QMouseEvent *pressEvent = new QMouseEvent(QMouseEvent::MouseButtonPress, element.geometry().center(), Qt::MouseButton::LeftButton, Qt::LeftButton, Qt::NoModifier);
+                QApplication::postEvent(webView, pressEvent);
+                QMouseEvent* releaseEvent = new QMouseEvent(QMouseEvent::MouseButtonRelease, element.geometry().center(), Qt::MouseButton::LeftButton, Qt::LeftButton, Qt::NoModifier);
+                QApplication::postEvent(webView, releaseEvent);
+                normalMode();
+
+                if(("INPUT" == element.tagName() and "text" == element.attribute("type")) or ("TEXTAREA" == element.tagName())) {
+                    insertMode();
+                }
+            }
+        }
+        else {
+            QWebElementCollection elements{currentFrame()->findAllElements("." + labelClass)};
+            for(auto it(elements.begin()) ; it != elements.end() ; it++) {
+                if((*it).toPlainText().startsWith(command)) {
+                    (*it).setStyleProperty("display", "inline");
+                }
+                else {
+                    (*it).setStyleProperty("display", "none");
+                }
+            }
         }
     }
     else if(keybindings.contains(command)) {
@@ -326,15 +412,30 @@ void Window::setTitle() {
 void Window::showFollowLabels() {
     mode = Mode::FOLLOW;
     modeLabel->setText(tr("follow") + ":");
-    QWebElementCollection elements{currentFrame()->findAllElements("a")};
-    linkMappings.clear();
-    QString mapping;
-    //TODO: make mapping of fixed size.
+    QWebElementCollection elements{currentFrame()->findAllElements("a, input")};
+    elementMappings.clear();
+
+    QSize viewportSize{webView->page()->viewportSize()};
+    int x1{currentFrame()->scrollBarValue(Qt::Horizontal)};
+    int y1{currentFrame()->scrollBarValue(Qt::Vertical)};
+    int x2{x1 + viewportSize.width()};
+    int y2{y1 + viewportSize.height()};
+
+    int elementCount{0};
     for(auto it(elements.begin()) ; it != elements.end() ; it++) {
         QRect elementRect{(*it).geometry()};
-        if(elementRect.width() > 0 and elementRect.height() > 0) {
-            nextMapping(mapping);
-            (*it).appendInside(R"html(<span class=")html" + labelClass + R"html(" style=")html"
+        if(elementRect.width() > 0 and elementRect.height() > 0 and elementRect.x() >= x1 and elementRect.x() <= x2 and elementRect.y() >= y1 and elementRect.y() <= y2) {
+            elementCount++;
+        }
+    }
+
+    int mappingSize{int(std::ceil(std::log(elementCount) / std::log(26)))};
+    QString mapping{mappingSize, 'a'};
+
+    for(auto it(elements.begin()) ; it != elements.end() ; it++) {
+        QRect elementRect{(*it).geometry()};
+        if(elementRect.width() > 0 and elementRect.height() > 0 and elementRect.x() >= x1 and elementRect.x() <= x2 and elementRect.y() >= y1 and elementRect.y() <= y2) {
+            (*it).prependOutside(R"html(<span class=")html" + labelClass + R"html(" style=")html"
                 "background: white;"
                 "border: 1px solid black;"
                 "border-radius: 3px;"
@@ -345,16 +446,19 @@ void Window::showFollowLabels() {
                 "font-weight: bold;"
                 "padding: 0 2px 0 2px;"
                 "position: absolute;"
+                "text-transform: none;"
+                "z-index: 9999;"
             "\">" + mapping + "</span>");
-            QString href{(*it).attribute("href")};
-            QUrl url{href};
-            if(href.startsWith("/")) {
-                QUrl currentURL{webView->url()};
-                url = QUrl(currentURL.scheme() + "://" + currentURL.host() + href);
-            }
-            linkMappings[mapping] = url;
+            elementMappings[mapping] = *it;
+            nextMapping(mapping);
         }
     }
+}
+
+void Window::showFollowLabelsNewWindow() {
+    showFollowLabels();
+    modeLabel->setText(tr("windowfollow") + ":");
+    newWindow = true;
 }
 
 void Window::showOpen() {
@@ -392,4 +496,8 @@ void Window::updateScrollLabel() {
             scrollValueLabel->setText("[" + QString::number(scrollPercentage) + "%]");
         }
     }
+}
+
+void Window::urlChanged(QUrl const& url) {
+    urlLabel->setText(url.toString());
 }

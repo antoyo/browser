@@ -21,7 +21,11 @@
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
-    Window window;
+    QString initialURL;
+    if(argc >= 2) {
+        initialURL = argv[1];
+    }
+    Window window(initialURL);
     window.show();
     return app.exec();
 }
