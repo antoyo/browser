@@ -80,7 +80,6 @@ void Window::createWidgets() {
     setLayout(vbox);
 
     //The web view.
-    //TODO: manage new window requested.
     webView = new ModalWebView(mode, this);
     webView->settings()->setIconDatabasePath(CONFIG_PATH);
     vbox->addWidget(webView);
@@ -293,7 +292,7 @@ void Window::loadInitialURLOrHomepage(QString const& initialURL) {
         webView->load(homepage);
     }
     else {
-        webView->load(initialURL);
+        webView->load(QUrl::fromUserInput(initialURL));
     }
 }
 

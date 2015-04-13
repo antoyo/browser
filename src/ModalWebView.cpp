@@ -16,11 +16,29 @@
  */
 
 #include <QKeyEvent>
+#include <QWebHitTestResult>
 
 #include "ModalWebView.hpp"
 #include "Window.hpp"
 
-ModalWebView::ModalWebView(Mode& initialMode, Window* initialParent) : mode(initialMode), parent(initialParent) {
+ModalWebView::ModalWebView(Mode& initialMode, Window* initialParent) : lastClickPosition(), mode(initialMode), parent(initialParent) {
+    hideScrollbar();
+}
+
+QWebView* ModalWebView::createWindow(QWebPage::WebWindowType) {
+    QWebHitTestResult result{page()->mainFrame()->hitTestContent(lastClickPosition)};
+    parent->openNewWindow(result.linkUrl());
+    return nullptr;
+}
+
+void ModalWebView::hideScrollbar() {
+    /*
+     * Base64-encoded of the following CSS:
+     * body::-webkit-scrollbar {
+     *     width: 0 !important;
+     * }
+     */
+    settings()->setUserStyleSheetUrl(QUrl("data:text/css;charset=utf-8;base64,Ym9keTo6LXdlYmtpdC1zY3JvbGxiYXIgewogICAgd2lkdGg6IDAgIWltcG9ydGFudDsKfQo="));
 }
 
 void ModalWebView::keyPressEvent(QKeyEvent* keyEvent) {
@@ -34,4 +52,9 @@ void ModalWebView::keyPressEvent(QKeyEvent* keyEvent) {
     else {
         parent->keyPress(keyEvent);
     }
+}
+
+void ModalWebView::mousePressEvent(QMouseEvent* mouseEvent) {
+    lastClickPosition = mouseEvent->pos();
+    QWebView::mousePressEvent(mouseEvent);
 }

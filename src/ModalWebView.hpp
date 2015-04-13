@@ -38,11 +38,21 @@ class ModalWebView : public QWebView {
         ModalWebView& operator=(ModalWebView const&) = delete;
 
     protected:
-        void keyPressEvent(QKeyEvent* keyEvent);
+        virtual QWebView* createWindow(QWebPage::WebWindowType);
+
+        virtual void keyPressEvent(QKeyEvent* keyEvent);
+
+        virtual void mousePressEvent(QMouseEvent* event);
 
     private:
+        QPoint lastClickPosition;
         Mode& mode;
         Window* parent;
+
+        /*
+         * Hide the body scrollbar.
+         */
+        void hideScrollbar();
 };
 
 #endif
