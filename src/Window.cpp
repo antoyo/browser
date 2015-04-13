@@ -38,6 +38,14 @@ Window::Window(QString const& initialURL) : command(), controlKeybindings(), cur
     loadInitialURLOrHomepage(initialURL);
 }
 
+void Window::click(QWebElement const& element) {
+    QPoint position{element.geometry().center() - currentFrame()->scrollPosition()};
+    QMouseEvent *pressEvent = new QMouseEvent(QMouseEvent::MouseButtonPress, position, Qt::MouseButton::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::postEvent(webView, pressEvent);
+    QMouseEvent* releaseEvent = new QMouseEvent(QMouseEvent::MouseButtonRelease, position, Qt::MouseButton::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::postEvent(webView, releaseEvent);
+}
+
 void Window::commandMode() {
     mode = Mode::COMMAND;
     lineEdit->show();
@@ -119,6 +127,26 @@ QWebFrame* Window::currentFrame() const {
     return webView->page()->currentFrame();
 }
 
+void Window::focusNextField() {
+    QWebElementCollection elements{currentFrame()->findAllElements(R"css(input[type="text"])css")};
+    int elementCount{0};
+    bool done{false};
+    for(auto it(elements.begin()) ; it != elements.end() ; it++) {
+        QRect elementRect{(*it).geometry()};
+        if(elementRect.width() > 0 and elementRect.height() > 0) {
+            if(elementCount == fieldIndex and not done) {
+                if(not isVisible(*it)) {
+                    currentFrame()->setScrollPosition((*it).geometry().topLeft());
+                }
+                click(*it);
+                done = true;
+            }
+            elementCount++;
+        }
+    }
+    fieldIndex = (fieldIndex + 1) % elementCount;
+}
+
 void Window::historyBack() {
     webView->history()->back();
 }
@@ -134,6 +162,16 @@ void Window::iconChanged() {
 void Window::insertMode() {
     mode = Mode::INSERT;
     modeLabel->setText("-- " + tr("INSERT MODE") + " --");
+}
+
+bool Window::isVisible(QWebElement const& element) {
+    QSize viewportSize{webView->page()->viewportSize()};
+    int x1{currentFrame()->scrollBarValue(Qt::Horizontal)};
+    int y1{currentFrame()->scrollBarValue(Qt::Vertical)};
+    int x2{x1 + viewportSize.width()};
+    int y2{y1 + viewportSize.height()};
+    QRect elementRect{element.geometry()};
+    return elementRect.width() > 0 and elementRect.height() > 0 and elementRect.x() >= x1 and elementRect.x() <= x2 and elementRect.y() >= y1 and elementRect.y() <= y2;
 }
 
 void Window::keyPress(QKeyEvent* keyEvent) {
@@ -203,6 +241,7 @@ void Window::loadConfig() {
     keybindings["ZZ"] = std::bind(&Window::quit, _1);
     keybindings["f"] = std::bind(&Window::showFollowLabels, _1);
     keybindings["F"] = std::bind(&Window::showFollowLabelsNewWindow, _1);
+    keybindings["gi"] = std::bind(&Window::focusNextField, _1);
 
     controlKeybindings['b'] = std::bind(&Window::scrollUpPage, _1);
     controlKeybindings['d'] = std::bind(&Window::scrollDownHalfPage, _1);
@@ -257,6 +296,7 @@ void Window::nextMapping(QString& mapping) {
 
 void Window::normalMode() {
     newWindow = false;
+    fieldIndex = 0;
     mode = Mode::NORMAL;
     lineEdit->hide();
     lineEdit->clear();
@@ -298,11 +338,7 @@ void Window::processCommand() {
                 normalMode();
             }
             else {
-                element.setFocus();
-                QMouseEvent *pressEvent = new QMouseEvent(QMouseEvent::MouseButtonPress, element.geometry().center(), Qt::MouseButton::LeftButton, Qt::LeftButton, Qt::NoModifier);
-                QApplication::postEvent(webView, pressEvent);
-                QMouseEvent* releaseEvent = new QMouseEvent(QMouseEvent::MouseButtonRelease, element.geometry().center(), Qt::MouseButton::LeftButton, Qt::LeftButton, Qt::NoModifier);
-                QApplication::postEvent(webView, releaseEvent);
+                click(element);
                 normalMode();
 
                 if(("INPUT" == element.tagName() and "text" == element.attribute("type")) or ("TEXTAREA" == element.tagName())) {
@@ -415,16 +451,10 @@ void Window::showFollowLabels() {
     QWebElementCollection elements{currentFrame()->findAllElements("a, input")};
     elementMappings.clear();
 
-    QSize viewportSize{webView->page()->viewportSize()};
-    int x1{currentFrame()->scrollBarValue(Qt::Horizontal)};
-    int y1{currentFrame()->scrollBarValue(Qt::Vertical)};
-    int x2{x1 + viewportSize.width()};
-    int y2{y1 + viewportSize.height()};
-
     int elementCount{0};
     for(auto it(elements.begin()) ; it != elements.end() ; it++) {
         QRect elementRect{(*it).geometry()};
-        if(elementRect.width() > 0 and elementRect.height() > 0 and elementRect.x() >= x1 and elementRect.x() <= x2 and elementRect.y() >= y1 and elementRect.y() <= y2) {
+        if(isVisible(*it)) {
             elementCount++;
         }
     }
@@ -433,8 +463,7 @@ void Window::showFollowLabels() {
     QString mapping{mappingSize, 'a'};
 
     for(auto it(elements.begin()) ; it != elements.end() ; it++) {
-        QRect elementRect{(*it).geometry()};
-        if(elementRect.width() > 0 and elementRect.height() > 0 and elementRect.x() >= x1 and elementRect.x() <= x2 and elementRect.y() >= y1 and elementRect.y() <= y2) {
+        if(isVisible(*it)) {
             (*it).prependOutside(R"html(<span class=")html" + labelClass + R"html(" style=")html"
                 "background: white;"
                 "border: 1px solid black;"

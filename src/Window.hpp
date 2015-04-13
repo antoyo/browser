@@ -67,6 +67,7 @@ class Window : public QWidget {
         QMap<QChar, std::function<void(Window*)>> controlKeybindings;
         QString currentTitle;
         QMap<QString, QWebElement> elementMappings;
+        int fieldIndex = 0;
         QUrl homepage;
         bool inProgress = false;
         QMap<QString, std::function<void(Window*)>> keybindings;
@@ -82,6 +83,11 @@ class Window : public QWidget {
         QLabel* scrollValueLabel = nullptr;
         QLabel* urlLabel = nullptr;
         ModalWebView* webView = nullptr;
+
+        /*
+         * Click on a web element.
+         */
+        void click(QWebElement const& element);
 
         /*
          * Change to command mode.
@@ -114,6 +120,11 @@ class Window : public QWidget {
         QWebFrame* currentFrame() const;
 
         /*
+         * Focus the next field.
+         */
+        void focusNextField();
+
+        /*
          * Go back in history.
          */
         void historyBack();
@@ -132,6 +143,11 @@ class Window : public QWidget {
          * Change to insert mode.
          */
         void insertMode();
+
+        /*
+         * Check if an element is currently visible.
+         */
+        bool isVisible(QWebElement const& element);
 
         /*
          * Link hovered event.
