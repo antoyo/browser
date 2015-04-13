@@ -54,6 +54,8 @@ void Window::commandMode() {
 
 void Window::configure() {
     showMaximized();
+
+    QDir::home().mkdir(CONFIG_PATH);
 }
 
 void Window::createEvents() {
@@ -75,8 +77,7 @@ void Window::createWidgets() {
     //The web view.
     //TODO: manage new window requested.
     webView = new ModalWebView(mode, this);
-    //TODO: change this path to ~/.navim/icons.
-    webView->settings()->setIconDatabasePath("/tmp");
+    webView->settings()->setIconDatabasePath(CONFIG_PATH);
     vbox->addWidget(webView);
 
     //The status bar.

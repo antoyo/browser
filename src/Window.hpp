@@ -20,6 +20,7 @@
 
 #include <functional>
 
+#include <QDir>
 #include <QLabel>
 #include <QLineEdit>
 #include <QProgressBar>
@@ -60,8 +61,9 @@ class Window : public QWidget {
         virtual void resizeEvent(QResizeEvent* windowResizeEvent);
 
     private:
-        QString labelClass = "__navim_label__";
-        int SCROLL_DELTA = 50;
+        QString const CONFIG_PATH = QDir::homePath() + "/.navim";
+        QString const labelClass = "__navim_label__";
+        int const SCROLL_DELTA = 50;
 
         QString command;
         QMap<QChar, std::function<void(Window*)>> controlKeybindings;
