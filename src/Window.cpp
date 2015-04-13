@@ -38,6 +38,11 @@ Window::Window(QString const& initialURL) : command(), controlKeybindings(), cur
     loadInitialURLOrHomepage(initialURL);
 }
 
+void Window::clearSearch() {
+    webView->findText("", findFlags & ~QWebPage::HighlightAllOccurrences);
+    webView->findText("", findFlags);
+}
+
 void Window::click(QWebElement const& element) {
     QPoint position{element.geometry().center() - currentFrame()->scrollPosition()};
     QMouseEvent *pressEvent = new QMouseEvent(QMouseEvent::MouseButtonPress, position, Qt::MouseButton::LeftButton, Qt::LeftButton, Qt::NoModifier);
@@ -128,6 +133,16 @@ QWebFrame* Window::currentFrame() const {
     return webView->page()->currentFrame();
 }
 
+void Window::findNext() {
+    webView->findText(searchText, findFlags & ~QWebPage::HighlightAllOccurrences);
+    webView->findText(searchText, findFlags);
+}
+
+void Window::findPrevious() {
+    webView->findText(searchText, (findFlags xor QWebPage::FindBackward) & ~QWebPage::HighlightAllOccurrences);
+    webView->findText(searchText, findFlags xor QWebPage::FindBackward);
+}
+
 void Window::focusNextField() {
     QWebElementCollection elements{currentFrame()->findAllElements(R"css(input[type="text"])css")};
     int elementCount{0};
@@ -160,6 +175,12 @@ void Window::iconChanged() {
     setWindowIcon(webView->icon());
 }
 
+void Window::incrementalSearch(QString const& text) {
+    clearSearch();
+    //TODO: improve search performance (perhaps using a thread).
+    webView->findText(text, findFlags);
+}
+
 void Window::insertMode() {
     mode = Mode::INSERT;
     modeLabel->setText("-- " + tr("INSERT MODE") + " --");
@@ -182,7 +203,14 @@ void Window::keyPress(QKeyEvent* keyEvent) {
 void Window::keyPressEvent(QKeyEvent* keyEvent) {
     int key{keyEvent->key()};
     if(Qt::Key_Escape == key) {
+        clearSearch();
         normalMode();
+    }
+    else if(Mode::NORMAL == mode and Qt::Key_Slash == key) {
+        showForwardSearchField();
+    }
+    else if(Mode::NORMAL == mode and Qt::Key_Question == key) {
+        showBackwardSearchField();
     }
     else if(Mode::NORMAL == mode or Mode::FOLLOW == mode) {
         QChar charKey{key};
@@ -243,6 +271,8 @@ void Window::loadConfig() {
     keybindings["f"] = std::bind(&Window::showFollowLabels, _1);
     keybindings["F"] = std::bind(&Window::showFollowLabelsNewWindow, _1);
     keybindings["gi"] = std::bind(&Window::focusNextField, _1);
+    keybindings["n"] = std::bind(&Window::findNext, _1);
+    keybindings["N"] = std::bind(&Window::findPrevious, _1);
 
     controlKeybindings['b'] = std::bind(&Window::scrollUpPage, _1);
     controlKeybindings['d'] = std::bind(&Window::scrollDownHalfPage, _1);
@@ -296,6 +326,7 @@ void Window::nextMapping(QString& mapping) {
 }
 
 void Window::normalMode() {
+    disconnect(lineEdit, nullptr, nullptr, nullptr);
     newWindow = false;
     fieldIndex = 0;
     mode = Mode::NORMAL;
@@ -304,7 +335,6 @@ void Window::normalMode() {
     modeLabel->clear();
     command.clear();
     commandLabel->clear();
-    disconnect(lineEdit, nullptr, nullptr, nullptr);
     removeLabels();
 }
 
@@ -438,12 +468,24 @@ void Window::scrollToTop() {
     updateScrollLabel();
 }
 
+void Window::search() {
+    searchText = lineEdit->text();
+    normalMode();
+    findNext();
+}
+
 void Window::setTitle() {
     QString newTitle{currentTitle};
     if(inProgress) {
         newTitle.prepend("[" + QString::number(progression) + "%] ");
     }
     setWindowTitle(newTitle);
+}
+
+void Window::showBackwardSearchField() {
+    modeLabel->setText(tr("Find backward") + ":");
+    findFlags |= QWebPage::FindBackward;
+    showSearchField();
 }
 
 void Window::showFollowLabels() {
@@ -491,6 +533,12 @@ void Window::showFollowLabelsNewWindow() {
     newWindow = true;
 }
 
+void Window::showForwardSearchField() {
+    modeLabel->setText(tr("Find forward") + ":");
+    findFlags &= ~QWebPage::FindBackward;
+    showSearchField();
+}
+
 void Window::showOpen() {
     modeLabel->setText(tr("open") + ":");
     commandMode();
@@ -500,6 +548,12 @@ void Window::showOpen() {
 void Window::showOpenWithCurrentURL() {
     lineEdit->setText(webView->url().toString());
     showOpen();
+}
+
+void Window::showSearchField() {
+    commandMode();
+    connect(lineEdit, &QLineEdit::textEdited, this, &Window::incrementalSearch);
+    connect(lineEdit, &QLineEdit::returnPressed, this, &Window::search);
 }
 
 void Window::showWindowOpen() {

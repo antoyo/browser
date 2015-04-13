@@ -70,12 +70,14 @@ class Window : public QWidget {
         QString currentTitle;
         QMap<QString, QWebElement> elementMappings;
         int fieldIndex = 0;
+        QWebPage::FindFlags findFlags = QWebPage::FindWrapsAroundDocument | QWebPage::HighlightAllOccurrences;
         QUrl homepage;
         bool inProgress = false;
         QMap<QString, std::function<void(Window*)>> keybindings;
         Mode mode = Mode::NORMAL;
         bool newWindow = false;
         int progression = 0;
+        QString searchText = "";
         int statusBarFontSize = 0;
 
         QLabel* commandLabel = nullptr;
@@ -85,6 +87,11 @@ class Window : public QWidget {
         QLabel* scrollValueLabel = nullptr;
         QLabel* urlLabel = nullptr;
         ModalWebView* webView = nullptr;
+
+        /*
+         * Clear the last search.
+         */
+        void clearSearch();
 
         /*
          * Click on a web element.
@@ -122,6 +129,16 @@ class Window : public QWidget {
         QWebFrame* currentFrame() const;
 
         /*
+         * Find the next occurence of the search string.
+         */
+        void findNext();
+
+        /*
+         * Find the previous occurence of the search string.
+         */
+        void findPrevious();
+
+        /*
          * Focus the next field.
          */
         void focusNextField();
@@ -140,6 +157,11 @@ class Window : public QWidget {
          * Icon changed event.
          */
         void iconChanged();
+
+        /*
+         * Search the specified text.
+         */
+        void incrementalSearch(QString const& text);
 
         /*
          * Change to insert mode.
@@ -267,9 +289,19 @@ class Window : public QWidget {
         void scrollUpPage();
 
         /*
+         * Start a search.
+         */
+        void search();
+
+        /*
          * Set the window title with the progress in a web page is loading.
          */
         void setTitle();
+
+        /*
+         * Show backward search field.
+         */
+        void showBackwardSearchField();
 
         /*
          * Show the labels on links and form elements.
@@ -282,6 +314,11 @@ class Window : public QWidget {
         void showFollowLabelsNewWindow();
 
         /*
+         * Show forward search field.
+         */
+        void showForwardSearchField();
+
+        /*
          * Show open URL input text field.
          */
         void showOpen();
@@ -290,6 +327,11 @@ class Window : public QWidget {
          * Show open URL input text field with the current URL.
          */
         void showOpenWithCurrentURL();
+
+        /*
+         * Show the search field.
+         */
+        void showSearchField();
 
         /*
          * Show open in a new window URL input text field.
