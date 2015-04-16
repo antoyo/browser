@@ -25,7 +25,6 @@
 #include <QWebFrame>
 #include <QWebHistory>
 
-#include "NoScrollbarStyle.hpp"
 #include "Window.hpp"
 
 using namespace std::placeholders;

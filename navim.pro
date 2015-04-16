@@ -15,5 +15,5 @@ QMAKE_CXXFLAGS_DEBUG += -pedantic -Wall -Wextra -Wold-style-cast -Woverloaded-vi
 QMAKE_CXXFLAGS_RELEASE += -O2 -Os -s
 
 # Input
-HEADERS += src/Window.hpp src/NoScrollbarStyle.hpp src/ModalWebView.hpp
-SOURCES += src/main.cpp src/Window.cpp src/NoScrollbarStyle.cpp src/ModalWebView.cpp
+HEADERS += src/Window.hpp src/ModalWebView.hpp
+SOURCES += src/main.cpp src/Window.cpp src/ModalWebView.cpp
