@@ -179,6 +179,10 @@ void Window::insertMode() {
     modeLabel->setText("-- " + tr("INSERT MODE") + " --");
 }
 
+bool Window::isFollow() const {
+    return Mode::FOLLOW == mode;
+}
+
 bool Window::isVisible(QWebElement const& element) {
     QSize viewportSize{webView->page()->viewportSize()};
     int x1{currentFrame()->scrollBarValue(Qt::Horizontal)};
@@ -205,7 +209,7 @@ void Window::keyPressEvent(QKeyEvent* keyEvent) {
     else if(Mode::NORMAL == mode and Qt::Key_Question == key) {
         showBackwardSearchField();
     }
-    else if(Mode::NORMAL == mode or Mode::FOLLOW == mode) {
+    else if(Mode::NORMAL == mode or isFollow()) {
         QChar charKey{key};
         if(Qt::Key_Backspace == key) {
             command.chop(1);
@@ -263,6 +267,7 @@ void Window::loadConfig() {
     keybindings["ZZ"] = std::bind(&Window::quit, _1);
     keybindings["f"] = std::bind(&Window::showFollowLabels, _1);
     keybindings["F"] = std::bind(&Window::showFollowLabelsNewWindow, _1);
+    keybindings["a"] = std::bind(&Window::showFollowLabelsSameWindow, _1);
     keybindings["gi"] = std::bind(&Window::focusNextField, _1);
     keybindings["n"] = std::bind(&Window::findNext, _1);
     keybindings["N"] = std::bind(&Window::findPrevious, _1);
@@ -320,7 +325,7 @@ void Window::nextMapping(QString& mapping) {
 
 void Window::normalMode() {
     disconnect(lineEdit, nullptr, nullptr, nullptr);
-    newWindow = false;
+    followMode = FollowMode::NORMAL;
     fieldIndex = 0;
     mode = Mode::NORMAL;
     lineEdit->hide();
@@ -347,27 +352,32 @@ void Window::pageReload() {
 }
 
 void Window::processCommand() {
-    if(Mode::FOLLOW == mode) {
+    if(isFollow()) {
         if(elementMappings.contains(command)) {
             QWebElement& element = elementMappings[command];
 
-            if(newWindow and "A" == element.tagName()) {
-                QString href{element.attribute("href")};
-                QUrl url{href};
-                if(url.scheme().isEmpty()) {
-                    QUrl currentURL{webView->url()};
-                    url = QUrl(currentURL.scheme() + "://" + currentURL.host() + href);
-                }
-                openNewWindow(url);
-                normalMode();
-            }
-            else {
+            if(FollowMode::NORMAL == followMode) {
                 click(element);
                 normalMode();
 
                 if(("INPUT" == element.tagName() and "text" == element.attribute("type")) or ("TEXTAREA" == element.tagName())) {
                     insertMode();
                 }
+            }
+            else if("A" == element.tagName()) {
+                QString href{element.attribute("href")};
+                QUrl url{href};
+                if(url.scheme().isEmpty()) {
+                    QUrl currentURL{webView->url()};
+                    url = QUrl(currentURL.scheme() + "://" + currentURL.host() + href);
+                }
+                if(FollowMode::NEW_WINDOW == followMode) {
+                    openNewWindow(url);
+                }
+                else {
+                    webView->load(url);
+                }
+                normalMode();
             }
         }
         else {
@@ -523,7 +533,13 @@ void Window::showFollowLabels() {
 void Window::showFollowLabelsNewWindow() {
     showFollowLabels();
     modeLabel->setText(tr("windowfollow") + ":");
-    newWindow = true;
+    followMode = FollowMode::NEW_WINDOW;
+}
+
+void Window::showFollowLabelsSameWindow() {
+    showFollowLabels();
+    modeLabel->setText(tr("samefollow") + ":");
+    followMode = FollowMode::SAME_WINDOW;
 }
 
 void Window::showForwardSearchField() {

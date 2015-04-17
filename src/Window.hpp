@@ -61,6 +61,12 @@ class Window : public QMainWindow {
         virtual void resizeEvent(QResizeEvent* windowResizeEvent);
 
     private:
+        enum class FollowMode {
+            NEW_WINDOW,
+            NORMAL,
+            SAME_WINDOW
+        };
+
         QString const CONFIG_PATH = QDir::homePath() + "/.navim";
         QString const labelClass = "__navim_label__";
         int const SCROLL_DELTA = 50;
@@ -71,11 +77,11 @@ class Window : public QMainWindow {
         QMap<QString, QWebElement> elementMappings;
         int fieldIndex = 0;
         QWebPage::FindFlags findFlags = QWebPage::FindWrapsAroundDocument | QWebPage::HighlightAllOccurrences;
+        FollowMode followMode = FollowMode::NORMAL;
         QUrl homepage;
         bool inProgress = false;
         QMap<QString, std::function<void(Window*)>> keybindings;
         Mode mode = Mode::NORMAL;
-        bool newWindow = false;
         int progression = 0;
         QString searchText = "";
         int statusBarFontSize = 0;
@@ -167,6 +173,11 @@ class Window : public QMainWindow {
          * Change to insert mode.
          */
         void insertMode();
+
+        /*
+         * Check if the current mode is FOLLOW or FOLLOW_SAME.
+         */
+        bool isFollow() const;
 
         /*
          * Check if an element is currently visible.
@@ -312,6 +323,11 @@ class Window : public QMainWindow {
          * Show the labels on links and form elements to open the link in a new window.
          */
         void showFollowLabelsNewWindow();
+
+        /*
+         * Show the labels on links and form elements to open the link in the same window.
+         */
+        void showFollowLabelsSameWindow();
 
         /*
          * Show forward search field.
