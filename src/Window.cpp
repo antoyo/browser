@@ -20,6 +20,7 @@
 #include <QKeyEvent>
 #include <QProcess>
 #include <QShortcut>
+#include <QStatusBar>
 #include <QVBoxLayout>
 #include <QWebElementCollection>
 #include <QWebFrame>
@@ -74,9 +75,11 @@ void Window::createEvents() {
 }
 
 void Window::createWidgets() {
+    QWidget* widget = new QWidget;
     QVBoxLayout* vbox = new QVBoxLayout;
     vbox->setContentsMargins(0, 0, 0, 0);
-    setLayout(vbox);
+    widget->setLayout(vbox);
+    setCentralWidget(widget);
 
     //The web view.
     webView = new ModalWebView(mode, this);
@@ -84,47 +87,39 @@ void Window::createWidgets() {
     vbox->addWidget(webView);
 
     //The status bar.
-    //TODO: use a real status bar?
-    QHBoxLayout* hbox{new QHBoxLayout};
-    hbox->setContentsMargins(0, 0, 5, 4);
-    vbox->addLayout(hbox);
+    statusBar()->setContentsMargins(5, 0, 5, 0);
 
     modeLabel = new QLabel;
     QFont labelFont{modeLabel->font()};
     labelFont.setPointSize(statusBarFontSize);
     modeLabel->setFont(labelFont);
-    hbox->addWidget(modeLabel);
+    statusBar()->addWidget(modeLabel);
 
     commandLabel = new QLabel;
     commandLabel->setFont(labelFont);
-    commandLabel->setMaximumHeight(statusBarFontSize + 4);
-    hbox->addWidget(commandLabel);
+    statusBar()->addWidget(commandLabel);
 
     //The text field.
     lineEdit = new QLineEdit;
     lineEdit->hide();
     lineEdit->setFrame(false);
-    hbox->addWidget(lineEdit);
-
-    hbox->addStretch(1);
+    statusBar()->addWidget(lineEdit);
 
     //The URL label.
     urlLabel = new QLabel;
     urlLabel->setFont(labelFont);
-    urlLabel->setMaximumHeight(statusBarFontSize + 4);
-    hbox->addWidget(urlLabel);
+    statusBar()->addPermanentWidget(urlLabel);
 
     //The scroll value label.
     scrollValueLabel = new QLabel("[" + tr("top") + "]");
     scrollValueLabel->setFont(labelFont);
-    scrollValueLabel->setMaximumHeight(statusBarFontSize + 4);
-    hbox->addWidget(scrollValueLabel);
+    statusBar()->addPermanentWidget(scrollValueLabel);
 
     //The progress bar.
     progressBar = new QProgressBar;
-    progressBar->setMaximumHeight(statusBarFontSize + 4);
+    progressBar->setMaximumWidth(100);
     progressBar->hide();
-    hbox->addWidget(progressBar);
+    statusBar()->addPermanentWidget(progressBar);
 }
 
 QWebFrame* Window::currentFrame() const {

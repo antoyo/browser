@@ -23,16 +23,16 @@
 #include <QDir>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMainWindow>
 #include <QProgressBar>
 #include <QWebElement>
-#include <QtWidgets/QWidget>
 
 #include "ModalWebView.hpp"
 
 /*
  * Main window of the web browser.
  */
-class Window : public QWidget {
+class Window : public QMainWindow {
     public:
         Window(QString const& initialURL);
 
