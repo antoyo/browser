@@ -550,6 +550,9 @@ void Window::showSearchField() {
 }
 
 void Window::showWindowOpen() {
+    modeLabel->setText(tr("windowopen") + ":");
+    commandMode();
+    connect(lineEdit, &QLineEdit::returnPressed, this, &Window::windowOpen);
 }
 
 void Window::titleChanged(QString const& title) {
@@ -577,4 +580,9 @@ void Window::updateScrollLabel() {
 
 void Window::urlChanged(QUrl const& url) {
     urlLabel->setText(url.toString());
+}
+
+void Window::windowOpen() {
+    openNewWindow(QUrl::fromUserInput(lineEdit->text()));
+    normalMode();
 }

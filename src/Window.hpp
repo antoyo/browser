@@ -354,9 +354,9 @@ class Window : public QMainWindow {
         void urlChanged(QUrl const& url);
 
         /*
-         * Window resized event.
+         * Open the URL from the input text field in a new window.
          */
-        void windowResized(QSize const&);
+        void windowOpen();
 };
 
 #endif
